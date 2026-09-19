@@ -211,7 +211,8 @@
 </div>
 
 <script>
-    const API_BASE = 'http://127.0.0.1:5000/api';
+    // 正式連接雲端 Render 後端 API
+    const API_BASE = 'https://songshan-backend.onrender.com/api';
     let currentTab = 'pending';
     let generatedCaptcha = "";
     let postsCache = [];
@@ -309,7 +310,7 @@
 
         const btn = document.getElementById('submit-btn');
         btn.disabled = true;
-        btn.innerText = "資料處理中...";
+        btn.innerText = "資料傳送中...";
 
         try {
             const content = document.getElementById('post-content').value.trim();
@@ -333,9 +334,11 @@
                 document.getElementById('submission-form').reset();
                 updateWordCount();
                 showPage('home-page');
+            } else {
+                alert("投稿失敗：" + (result.message || "未知錯誤"));
             }
         } catch (e) {
-            alert("伺服器連線失敗！");
+            alert("伺服器連線失敗！Render 伺服器可能正在休眠啟動中，請稍等 30 秒後重試。");
         } finally {
             btn.disabled = false;
             btn.innerText = "送出投稿";
@@ -361,6 +364,7 @@
         
         const fullId = rawId.startsWith('post-') ? rawId : `post-${rawId}`;
         const resDiv = document.getElementById('status-result');
+        resDiv.innerText = "查詢中...";
         
         try {
             const res = await fetch(`${API_BASE}/admin/posts`);
@@ -419,7 +423,7 @@
                 tbody.appendChild(tr);
             });
         } catch (e) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">連線失敗！請確認 Python app.py 是否啟動。</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">連線失敗！雲端伺服器可能啟動中，請重新整理頁面。</td></tr>';
         }
     }
 
