@@ -14,7 +14,8 @@
         .active { display: block; }
         label { display: block; margin-top: 10px; font-weight: bold; }
         textarea, input[type="text"], input[type="password"], input[type="file"] { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        .word-count { text-align: right; font-size: 12px; color: gray; }
+        .word-count { text-align: right; font-size: 12px; color: gray; margin-top: 3px; }
+        .notice-text { font-size: 12px; color: #d9534f; margin-top: 4px; font-weight: bold; display: none; }
         .captcha-box { margin-top: 15px; padding: 10px; background: #eee; text-align: center; border-radius: 4px; }
         .back-btn { background: #6c757d; margin-top: 15px; }
 
@@ -25,6 +26,9 @@
         .id-input-group { display: flex; align-items: center; margin-top: 5px; }
         .id-prefix { background: #e9ecef; border: 1px solid #ccc; border-right: none; padding: 10px 12px; font-weight: bold; color: #495057; border-top-left-radius: 4px; border-bottom-left-radius: 4px; font-size: 14px; }
         .id-input-group input { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-top: 0; }
+
+        /* 即將推出樣式 */
+        .coming-soon-box { background: #e9ecef; border: 1px dashed #6c757d; padding: 10px; border-radius: 4px; margin-top: 5px; color: #6c757d; font-size: 13px; text-align: center; }
 
         /* 後台分頁按鈕 */
         .tab-container { display: flex; gap: 10px; margin-bottom: 15px; }
@@ -66,11 +70,15 @@
         <h2>匿名投稿</h2>
         <form id="submission-form" onsubmit="handleFormSubmit(event)">
             <label for="post-content">投稿內容（AI 將自動進行班級與姓名去敏）：</label>
-            <textarea id="post-content" maxlength="50" rows="3" placeholder="限制 50 字以內..." required oninput="updateWordCount()"></textarea>
-            <div class="word-count"><span id="char-count">0</span>/50 字</div>
+            <textarea id="post-content" maxlength="200" rows="4" placeholder="請輸入投稿文字內容..." required oninput="updateWordCount()"></textarea>
+            <div class="word-count"><span id="char-count">0</span>/200 字</div>
+            <div id="long-text-notice" class="notice-text">💡 提醒：內容超過 50 字，發布時簡介將自動為您縮略，完整文章內容將呈現於內文中！</div>
 
-            <label for="post-file">上傳圖片：</label>
-            <input type="file" id="post-file" accept="image/*" onchange="validateFileSize(this)">
+            <label for="post-file">上傳圖片（系統將自動進行高效壓縮）：</label>
+            <input type="file" id="post-file" accept="image/*">
+
+            <label>上傳影片：</label>
+            <div class="coming-soon-box">🎬 影片投稿功能開發中（即將推出，敬請期待！）</div>
 
             <div class="captcha-box">
                 <label>請輸入驗證碼：<span id="captcha-code" style="font-weight:bold; color:red;"></span></label>
@@ -222,14 +230,16 @@
         loadAdminPosts();
     }
 
+    // 更新字數與提示文字
     function updateWordCount() {
-        document.getElementById('char-count').innerText = document.getElementById('post-content').value.length;
-    }
-
-    function validateFileSize(input) {
-        if (input.files[0] && input.files[0].size > 1024 * 1024) {
-            alert("圖片不能超過 1MB！");
-            input.value = "";
+        const len = document.getElementById('post-content').value.length;
+        document.getElementById('char-count').innerText = len;
+        
+        const noticeEl = document.getElementById('long-text-notice');
+        if (len > 50) {
+            noticeEl.style.display = 'block';
+        } else {
+            noticeEl.style.display = 'none';
         }
     }
 
@@ -238,12 +248,42 @@
         document.getElementById('captcha-code').innerText = generatedCaptcha;
     }
 
-    function fileToBase64(file) {
+    // 前端自動壓縮圖片並轉碼 Base64
+    function compressAndConvertToBase64(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = error => reject(error);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height = Math.round((height * maxWidth) / width);
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width = Math.round((width * maxHeight) / height);
+                            height = maxHeight;
+                        }
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                    resolve(compressedBase64);
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
         });
     }
 
@@ -269,11 +309,17 @@
 
         const btn = document.getElementById('submit-btn');
         btn.disabled = true;
+        btn.innerText = "資料處理中...";
 
         try {
             const content = document.getElementById('post-content').value.trim();
             const file = document.getElementById('post-file').files[0];
-            let mediaUrl = file ? await fileToBase64(file) : "";
+            let mediaUrl = "";
+
+            if (file) {
+                btn.innerText = "圖片自動壓縮中...";
+                mediaUrl = await compressAndConvertToBase64(file);
+            }
 
             const res = await fetch(`${API_BASE}/submit`, {
                 method: 'POST',
@@ -292,6 +338,7 @@
             alert("伺服器連線失敗！");
         } finally {
             btn.disabled = false;
+            btn.innerText = "送出投稿";
         }
     }
 
