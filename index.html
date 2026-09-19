@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>松農匿名投稿板</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1, h2 { text-align: center; color: #333; }
+        .menu-btn { display: block; width: 100%; padding: 15px; margin: 10px 0; background: #0095f6; color: white; text-align: center; border-radius: 5px; font-weight: bold; border: none; cursor: pointer; }
+        .menu-btn:hover { background: #0077c5; }
+        .page { display: none; }
+        .active { display: block; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        textarea, input[type="text"], input[type="password"], input[type="file"] { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        .word-count { text-align: right; font-size: 12px; color: gray; }
+        .captcha-box { margin-top: 15px; padding: 10px; background: #eee; text-align: center; border-radius: 4px; }
+        .back-btn { background: #6c757d; margin-top: 15px; }
+
+        .disclaimer-box { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-top: 15px; border-radius: 4px; font-size: 14px; color: #856404; line-height: 1.6; }
+        .admin-secret-link { display: block; text-align: center; margin-top: 30px; font-size: 11px; color: rgba(0, 0, 0, 0.25); text-decoration: underline; cursor: pointer; }
+
+        /* 編號輸入組合框 */
+        .id-input-group { display: flex; align-items: center; margin-top: 5px; }
+        .id-prefix { background: #e9ecef; border: 1px solid #ccc; border-right: none; padding: 10px 12px; font-weight: bold; color: #495057; border-top-left-radius: 4px; border-bottom-left-radius: 4px; font-size: 14px; }
+        .id-input-group input { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-top: 0; }
+
+        /* 後台分頁按鈕 */
+        .tab-container { display: flex; gap: 10px; margin-bottom: 15px; }
+        .tab-btn { flex: 1; padding: 10px; background: #e0e0e0; border: none; cursor: pointer; font-weight: bold; border-radius: 4px; }
+        .tab-btn.active { background: #0095f6; color: white; }
+
+        .admin-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        .admin-table th, .admin-table td { border: 1px solid #ddd; padding: 8px; text-align: left; word-break: break-all; }
+        .admin-table th { background-color: #f2f2f2; }
+        
+        .btn-act { border: none; padding: 5px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-right: 3px; color: white; margin-bottom: 2px; }
+        .btn-approve { background: #28a745; }
+        .btn-reject { background: #dc3545; }
+        .btn-delete { background: #343a40; }
+
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; display: inline-block; }
+        .bg-pending { background-color: #ffc107; color: #333; }
+        .bg-approved { background-color: #28a745; color: white; }
+        .bg-rejected { background-color: #dc3545; color: white; }
+        .bg-processed { background-color: #17a2b8; color: white; }
+        .post-img-thumb { max-width: 70px; max-height: 70px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="home-page" class="page active">
+        <h1>松農匿名投稿板</h1>
+        <button class="menu-btn" onclick="showPage('submit-page')">1. 匿名投稿</button>
+        <button class="menu-btn" onclick="showPage('rules-page')">2. 版規說明</button>
+        <button class="menu-btn" onclick="showPage('delete-page')">3. 刪文申請</button>
+        <button class="menu-btn" onclick="showPage('status-page')">4. 查詢審核進度</button>
+        <button class="menu-btn" onclick="showPage('disclaimer-page')">5. 免責聲明</button>
+        <span class="admin-secret-link" onclick="openAdminLogin()">管理員登入</span>
+    </div>
+
+    <!-- 1. 投稿頁面 -->
+    <div id="submit-page" class="page">
+        <h2>匿名投稿</h2>
+        <form id="submission-form" onsubmit="handleFormSubmit(event)">
+            <label for="post-content">投稿內容（AI 將自動進行班級與姓名去敏）：</label>
+            <textarea id="post-content" maxlength="50" rows="3" placeholder="限制 50 字以內..." required oninput="updateWordCount()"></textarea>
+            <div class="word-count"><span id="char-count">0</span>/50 字</div>
+
+            <label for="post-file">上傳圖片：</label>
+            <input type="file" id="post-file" accept="image/*" onchange="validateFileSize(this)">
+
+            <div class="captcha-box">
+                <label>請輸入驗證碼：<span id="captcha-code" style="font-weight:bold; color:red;"></span></label>
+                <input type="text" id="captcha-input" required>
+            </div>
+
+            <button type="submit" id="submit-btn" class="menu-btn" style="margin-top: 20px;">送出投稿</button>
+        </form>
+        <button class="menu-btn back-btn" onclick="showPage('home-page')">返回主頁</button>
+    </div>
+
+    <!-- 2. 版規說明 -->
+    <div id="rules-page" class="page">
+        <h2>版規說明</h2>
+        <div style="background: #fff; padding: 20px; border-radius: 6px; border: 1px solid #ddd; line-height: 1.8; font-size: 14px;">
+            <p><strong>【松農匿名投稿板 官方管理規範】</strong></p>
+            <p>本平台旨在提供校園師生自由、多元的表達管道，維護友善且負責任的網路社群環境。所有投稿者請務必仔細閱讀並遵守以下規範：</p>
+            
+            <ol style="margin-left: 20px; margin-top: 10px;">
+                <li style="margin-bottom: 10px;">
+                    <strong>貼文審核與發布時間</strong>：<br>
+                    投稿送出後需經過版主與系統進行人工審核，貼文大概需要 <strong>1 至 7 個工作天</strong> 完成審核並公開發布，請耐性等待，勿急於重複投稿。
+                </li>
+                <li style="margin-bottom: 10px;">
+                    <strong>嚴禁惡意洗版與重複投稿</strong>：<br>
+                    禁止在短時間內連續傳送相同或高度相似之文章，或意圖利用大量留言進行洗版攻擊。違者經系統偵測，該 IP 位址將可能被永久封鎖。
+                </li>
+                <li style="margin-bottom: 10px;">
+                    <strong>禁止人身攻擊與霸凌言論</strong>：<br>
+                    嚴禁發布包含公然侮辱、惡意毀謗、恐嚇威脅、歧視性言論（包含種族、性別、外貌、信仰等），或針對特定個人、社團進行集體霸凌與帶風向攻擊之內容。
+                </li>
+                <li style="margin-bottom: 10px;">
+                    <strong>個人隱私與個資保護（保護隱私）</strong>：<br>
+                    禁止公開揭露任何人之真實姓名、住址、私人聯絡電話、社群帳號（如 IG/FB）、私人照片，或具特定辨識度之個資。系統將自動強制進行遮罩去敏。
+                </li>
+                <li style="margin-bottom: 10px;">
+                    <strong>遵守法律規範與智慧財產權</strong>：<br>
+                    嚴禁散布猥褻色情、暴力血腥、毒品賭博、詐欺廣告或任何違法之文字與圖片。轉載非原創內容請註明出處，切勿侵犯他人著作權。
+                </li>
+                <li style="margin-bottom: 10px;">
+                    <strong>版主審核裁量權</strong>：<br>
+                    管理團隊保有最終審核與裁決權，若投稿內容有爭議或違反校園和諧，版主有權直接退回或刪除，恕不另行通知。
+                </li>
+            </ol>
+        </div>
+        <button class="menu-btn back-btn" onclick="showPage('home-page')">返回主頁</button>
+    </div>
+
+    <!-- 3. 刪文申請 -->
+    <div id="delete-page" class="page">
+        <h2>刪文申請</h2>
+        <form onsubmit="handleDeleteSubmit(event)">
+            <label>投稿編號：</label>
+            <div class="id-input-group">
+                <span class="id-prefix">post-</span>
+                <input type="text" id="delete-id-num" placeholder="請輸入5位編號 (例如: 66130)" required>
+            </div>
+            <label style="margin-top:15px;">刪除原因：</label>
+            <textarea id="delete-reason" rows="3" placeholder="請填寫申請刪除的原因..." required></textarea>
+            <button type="submit" class="menu-btn" style="margin-top: 15px;">送出申請</button>
+        </form>
+        <button class="menu-btn back-btn" onclick="showPage('home-page')">返回主頁</button>
+    </div>
+
+    <!-- 4. 查詢進度 -->
+    <div id="status-page" class="page">
+        <h2>查詢審核進度</h2>
+        <label>投稿編號：</label>
+        <div class="id-input-group">
+            <span class="id-prefix">post-</span>
+            <input type="text" id="search-id-num" placeholder="請輸入5位編號 (例如: 66130)" required>
+        </div>
+        <button class="menu-btn" style="margin-top: 15px;" onclick="checkStatus()">查詢</button>
+        <div id="status-result" style="margin-top: 15px; text-align: center; font-weight: bold;"></div>
+        <button class="menu-btn back-btn" onclick="showPage('home-page')">返回主頁</button>
+    </div>
+
+    <!-- 5. 免責聲明 -->
+    <div id="disclaimer-page" class="page">
+        <h2>免責聲明</h2>
+        <div class="disclaimer-box">
+            <p><strong>【松農匿名投稿板 法律責任與免責條款】</strong></p>
+            <p>1. <strong>言論立場免責</strong>：本平台為提供校園資訊交流之開放性匿名投稿系統，刊載之所有內容（包含文字、圖片、連結等）均為投稿者個人立場，並不代表本平台管理團隊或松山工農官方之立場或觀點。</p>
+            <p>2. <strong>法律責任歸屬</strong>：網路匿名性並不保障違法行為免責。依據中華民國法律，發表言論仍須承擔相應之刑事與民事責任（包含但不限於刑法妨害名譽罪、公然侮辱罪、個人資料保護法等）。如貼文涉及重大違法情事，本平台將依據合法程序配合司法檢調機關或校方調查，提供必要的登入資訊與紀錄（包含 IP 位址）。</p>
+            <p>3. <strong>審核機制免責</strong>：平台之 AI 去敏與人工審核機制僅為盡力降低個資洩漏及違反版規之風險，無法完全保證任何刊載內容之正確性、適法性或合法性。若有漏網之個資或疑慮內容，當事人得隨時提出刪文申請。</p>
+            <p>4. <strong>服務中斷免責</strong>：本平台不對因伺服器故障、網路連線異常、系統維護或不可抗力因素所導致之訊息遺失、儲存失敗或服務中斷負擔任何損害賠償責任。</p>
+        </div>
+        <button class="menu-btn back-btn" onclick="showPage('home-page')">返回主頁</button>
+    </div>
+
+    <!-- 管理員登入 -->
+    <div id="admin-login-page" class="page">
+        <h2>版主身分驗證</h2>
+        <form onsubmit="handleAdminLogin(event)">
+            <label>帳號：</label><input type="text" id="admin-user" required>
+            <label>密碼：</label><input type="password" id="admin-pass" required>
+            <button type="submit" class="menu-btn" style="margin-top: 15px;">登入</button>
+        </form>
+        <button class="menu-btn back-btn" onclick="showPage('home-page')">返回</button>
+    </div>
+
+    <!-- 後台管理 -->
+    <div id="admin-dashboard-page" class="page">
+        <h2>版主全權管理後台</h2>
+        
+        <div class="tab-container">
+            <button class="tab-btn active" id="tab-pending" onclick="switchAdminTab('pending')">待處理投稿</button>
+            <button class="tab-btn" id="tab-history" onclick="switchAdminTab('history')">歷史紀錄</button>
+        </div>
+
+        <div style="overflow-x:auto;">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>ID / IP</th>
+                        <th>投稿內容 (AI 去敏)</th>
+                        <th>媒體圖片</th>
+                        <th>狀態</th>
+                        <th>版主操作</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-post-list">
+                    <tr><td colspan="5" style="text-align:center;">載入中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <button class="menu-btn back-btn" onclick="showPage('home-page')">登出並返回</button>
+    </div>
+</div>
+
+<script>
+    const API_BASE = 'http://127.0.0.1:5000/api';
+    let currentTab = 'pending';
+    let generatedCaptcha = "";
+    let postsCache = [];
+
+    function showPage(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        if(pageId === 'submit-page') generateCaptcha();
+        if(pageId === 'admin-dashboard-page') loadAdminPosts();
+    }
+
+    function switchAdminTab(tab) {
+        currentTab = tab;
+        document.getElementById('tab-pending').classList.toggle('active', tab === 'pending');
+        document.getElementById('tab-history').classList.toggle('active', tab === 'history');
+        loadAdminPosts();
+    }
+
+    function updateWordCount() {
+        document.getElementById('char-count').innerText = document.getElementById('post-content').value.length;
+    }
+
+    function validateFileSize(input) {
+        if (input.files[0] && input.files[0].size > 1024 * 1024) {
+            alert("圖片不能超過 1MB！");
+            input.value = "";
+        }
+    }
+
+    function generateCaptcha() {
+        generatedCaptcha = Math.floor(1000 + Math.random() * 9000).toString();
+        document.getElementById('captcha-code').innerText = generatedCaptcha;
+    }
+
+    function fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
+    }
+
+    // 狀態轉中文工具函數
+    function formatStatusChinese(status) {
+        const map = {
+            'pending': '待處理',
+            'approved': '核准發布',
+            'rejected': '拒絕退回',
+            'delete': '已刪除',
+            'deleted': '已刪除'
+        };
+        return map[status] || status;
+    }
+
+    async function handleFormSubmit(event) {
+        event.preventDefault();
+        if (document.getElementById('captcha-input').value !== generatedCaptcha) {
+            alert("驗證碼錯誤！");
+            generateCaptcha();
+            return;
+        }
+
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = true;
+
+        try {
+            const content = document.getElementById('post-content').value.trim();
+            const file = document.getElementById('post-file').files[0];
+            let mediaUrl = file ? await fileToBase64(file) : "";
+
+            const res = await fetch(`${API_BASE}/submit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content, media_url: mediaUrl })
+            });
+            const result = await res.json();
+
+            if (result.success) {
+                alert(`投稿成功！您的編號為：${result.post_id}（貼文預計 1 至 7 天內完成審核發布）`);
+                document.getElementById('submission-form').reset();
+                updateWordCount();
+                showPage('home-page');
+            }
+        } catch (e) {
+            alert("伺服器連線失敗！");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    function handleDeleteSubmit(event) {
+        event.preventDefault();
+        const rawId = document.getElementById('delete-id-num').value.trim();
+        const fullId = rawId.startsWith('post-') ? rawId : `post-${rawId}`;
+        alert(`已送出投稿 ${fullId} 的刪文申請！`);
+        document.getElementById('delete-id-num').value = '';
+        document.getElementById('delete-reason').value = '';
+        showPage('home-page');
+    }
+
+    async function checkStatus() {
+        const rawId = document.getElementById('search-id-num').value.trim();
+        if (!rawId) {
+            alert("請輸入編號！");
+            return;
+        }
+        
+        const fullId = rawId.startsWith('post-') ? rawId : `post-${rawId}`;
+        const resDiv = document.getElementById('status-result');
+        
+        try {
+            const res = await fetch(`${API_BASE}/admin/posts`);
+            const data = await res.json();
+            const post = data.posts.find(p => p.id === fullId);
+            if (post) {
+                const chineseStatus = formatStatusChinese(post.status);
+                resDiv.innerText = `投稿編號 ${fullId} 狀態：【${chineseStatus}】`;
+            } else {
+                resDiv.innerText = `查無編號 ${fullId} 的記錄。`;
+            }
+        } catch (e) {
+            resDiv.innerText = "查詢失敗，請檢查網路連線。";
+        }
+    }
+
+    function openAdminLogin() { showPage('admin-login-page'); }
+
+    function handleAdminLogin(event) {
+        event.preventDefault();
+        if (document.getElementById('admin-user').value === 'admin' && document.getElementById('admin-pass').value === '123456') {
+            showPage('admin-dashboard-page');
+        } else {
+            alert("帳號或密碼錯誤！");
+        }
+    }
+
+    async function loadAdminPosts() {
+        const tbody = document.getElementById('admin-post-list');
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">載入中...</td></tr>';
+
+        try {
+            const res = await fetch(`${API_BASE}/admin/posts?status=${currentTab}`);
+            const data = await res.json();
+
+            if (!data.success || data.posts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">無資料。</td></tr>';
+                return;
+            }
+
+            postsCache = data.posts;
+            tbody.innerHTML = "";
+            data.posts.forEach(item => {
+                let media = item.media_url ? `<a href="${item.media_url}" target="_blank"><img src="${item.media_url}" class="post-img-thumb"/></a>` : "無";
+                let statusBadge = getStatusBadge(item.status);
+                let actions = getActionButtons(item.id, item.status);
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${item.id}</strong><br><small>${item.ip_address || ''}</small></td>
+                    <td>${item.anonymized_content || item.original_content}</td>
+                    <td>${media}</td>
+                    <td>${statusBadge}</td>
+                    <td>${actions}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">連線失敗！請確認 Python app.py 是否啟動。</td></tr>';
+        }
+    }
+
+    function getStatusBadge(status) {
+        const chineseStatus = formatStatusChinese(status);
+        if (status === 'pending') return `<span class="status-badge bg-pending">${chineseStatus}</span>`;
+        if (status === 'approved' || status === '核准發布') return `<span class="status-badge bg-approved">核准發布</span>`;
+        if (status === 'rejected' || status === '拒絕退回') return `<span class="status-badge bg-rejected">拒絕退回</span>`;
+        return `<span class="status-badge bg-processed">${chineseStatus}</span>`;
+    }
+
+    function getActionButtons(id, status) {
+        let btns = '';
+        if (currentTab === 'pending') {
+            btns += `<button class="btn-act btn-approve" onclick="handleApprove('${id}')">核准</button>`;
+            btns += `<button class="btn-act btn-reject" onclick="updateStatus('${id}', 'rejected')">拒絕</button>`;
+            btns += `<button class="btn-act btn-delete" onclick="handleDelete('${id}')">刪除</button>`;
+        } else {
+            btns += `<button class="btn-act btn-delete" onclick="handleDelete('${id}')">刪除</button>`;
+        }
+        return btns;
+    }
+
+    async function handleApprove(id) {
+        const post = postsCache.find(p => p.id === id);
+        if (!post) return;
+
+        const contentToCopy = post.anonymized_content || post.original_content;
+        
+        try {
+            await navigator.clipboard.writeText(contentToCopy);
+            alert("✅ 文章內容已自動複製到剪貼簿！");
+        } catch (err) {
+            alert("⚠️ 複製文字失敗，請手動複製：\n" + contentToCopy);
+        }
+
+        if (post.media_url) {
+            const a = document.createElement('a');
+            a.href = post.media_url;
+            a.download = `${post.id}_image.jpg`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        await updateStatus(id, 'approved');
+    }
+
+    async function handleDelete(id) {
+        const reasonOptions = "請選擇或輸入刪除原因：\n1. 違反版規\n2. 重複投稿/洗版\n3. 涉及人身攻擊/個資隱私\n4. 申請人要求刪除";
+        const inputReason = prompt(`${reasonOptions}\n\n可以直接填寫理由或數字：`, "違反版規");
+
+        if (inputReason === null) return;
+
+        await updateStatus(id, 'delete', inputReason);
+    }
+
+    async function updateStatus(id, action, reason = '') {
+        try {
+            await fetch(`${API_BASE}/admin/post/${id}/action`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, reason })
+            });
+            loadAdminPosts();
+        } catch (e) {
+            alert("操作失敗！");
+        }
+    }
+</script>
+</body>
+</html>
